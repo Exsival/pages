@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>Vocabulaire Anglais</title>
+</head>
+<body>
+    <div class="container">
+        <h1>🇫🇷 Entraîneur de Vocabulaire 🇬🇧</h1>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('manage')">📚 Gérer le vocabulaire</button>
+            <button class="tab-btn" onclick="switchTab('train')">🎯 S'entraîner</button>
+            <button class="tab-btn" onclick="switchTab('history')">📊 Historique</button>
+        </div>
+
+        <div id="manage" class="tab-content active">
+            <div class="save-info">
+                <strong>💾 Sauvegarde automatique :</strong> Vos données sont sauvegardées automatiquement dans des fichiers JSON sur votre poste (même dossier que ce fichier HTML).
+            </div>
+
+            <h2 style="margin-bottom: 20px; color: #2d3748;">Ajouter du vocabulaire</h2>
+            
+            <div class="input-group">
+                <input type="text" id="frenchInput" placeholder="Mot en français" onkeypress="handleEnterAdd(event)">
+                <input type="text" id="englishInput" placeholder="Mot en anglais" onkeypress="handleEnterAdd(event)">
+            </div>
+            <button class="btn btn-success" onclick="addWord()" style="width: 100%; margin-bottom: 20px;">➕ Ajouter le mot</button>
+
+            <div class="export-section">
+                <h3 style="margin-bottom: 15px; color: #2d3748;">Importer / Exporter</h3>
+                <div class="btn-group">
+                    <label class="file-input-label">
+                        📁 Importer vocabulaire
+                        <input type="file" id="vocabFileInput" accept=".txt,.json" onchange="importVocabulary()">
+                    </label>
+                    <button class="btn btn-primary" onclick="exportVocabulary()">💾 Exporter vocabulaire</button>
+                    <button class="btn btn-primary" onclick="saveAllData()">💾 Sauvegarder tout</button>
+                </div>
+                <div style="margin-top: 15px;">
+                    <label class="file-input-label">
+                        📊 Importer historique
+                        <input type="file" id="historyFileInput" accept=".json" onchange="importHistory()">
+                    </label>
+                    <button class="btn btn-primary" onclick="exportHistory()" style="margin-left: 10px;">💾 Exporter historique</button>
+                </div>
+            </div>
+
+            <h3 style="margin: 30px 0 15px; color: #2d3748;">Liste du vocabulaire (<span id="vocabCount">0</span> mots)</h3>
+            <div class="vocab-list" id="vocabList"></div>
+        </div>
+
+        <div id="train" class="tab-content">
+            <div id="trainStart">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎯</div>
+                    <h2>Prêt à vous entraîner ?</h2>
+                    <p style="margin: 20px 0;">Testez vos connaissances en vocabulaire</p>
+                    <button class="btn btn-primary" onclick="startTraining()" style="font-size: 1.2em; padding: 15px 40px;">🚀 Commencer l'entraînement</button>
+                </div>
+            </div>
+
+            <div id="trainActive" style="display: none;">
+                <div class="stats-box">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalQuestions">0</div>
+                        <div class="stat-label">Questions posées</div>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);">
+                        <div class="stat-value" id="correctAnswers">0</div>
+                        <div class="stat-label">Réponses correctes</div>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);">
+                        <div class="stat-value" id="wrongAnswers">0</div>
+                        <div class="stat-label">Réponses incorrectes</div>
+                    </div>
+                </div>
+
+                <div id="questionPhase">
+                    <div class="question-box">
+                        <div class="question-label" id="questionLabel">Traduisez en anglais</div>
+                        <div class="question-text" id="questionText">Bonjour</div>
+                    </div>
+                    <input type="text" class="answer-input" id="answerInput" placeholder="Votre réponse..." onkeypress="handleEnterCheck(event)">
+                    <div class="btn-group" style="margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="checkAnswer()" style="padding: 15px 40px; font-size: 1.1em;">✓ Vérifier</button>
+                        <button class="btn btn-secondary" onclick="skipWord()" style="padding: 15px 40px; font-size: 1.1em;">⏭️ Skip</button>
+                        <button class="btn btn-danger" onclick="stopTraining()">⏹️ Arrêter</button>
+                    </div>
+                </div>
+
+                <div id="resultPhase" style="display: none;">
+                    <div class="result-box" id="resultBox">
+                        <div class="result-icon" id="resultIcon">✓</div>
+                        <h2 id="resultMessage">Correct !</h2>
+                        <p id="correctAnswerText" style="font-size: 1.2em; margin-top: 10px;"></p>
+                    </div>
+                    <button class="btn btn-primary" onclick="nextQuestion()" style="padding: 15px 40px; font-size: 1.1em;">➡️ Question suivante</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="history" class="tab-content">
+            <h2 style="margin-bottom: 20px; color: #2d3748;">Historique des entraînements</h2>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+    <script>
+        let vocabulary = [];
+        let currentWord = null;
+        let sessionStats = { total: 0, correct: 0, wrong: 0 };
+        let trainingHistory = [];
+        let sessionStartTime = null;
+
+        function init() {
+            displayVocabulary();
+            displayHistory();
+        }
+
+        function switchTab(tabName) {
+            const tabs = document.querySelectorAll('.tab-btn');
+            const contents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(btn => btn.classList.remove('active'));
+            contents.forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'history') {
+                displayHistory();
+            }
+        }
+
+        function addWord() {
+            const french = document.getElementById('frenchInput').value.trim();
+            const english = document.getElementById('englishInput').value.trim();
+
+            if (french && english) {
+                vocabulary.push({ french, english });
+                document.getElementById('frenchInput').value = '';
+                document.getElementById('englishInput').value = '';
+                displayVocabulary();
+                saveAllData();
+            }
+        }
+
+        function handleEnterAdd(event) {
+            if (event.key === 'Enter') {
+                addWord();
+            }
+        }
+
+        function removeWord(index) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer ce mot ?')) {
+                vocabulary.splice(index, 1);
+                displayVocabulary();
+                saveAllData();
+            }
+        }
+
+        function displayVocabulary() {
+            const list = document.getElementById('vocabList');
+            const count = document.getElementById('vocabCount');
+            
+            count.textContent = vocabulary.length;
+
+            if (vocabulary.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📖</div><p>Aucun mot ajouté pour le moment</p></div>';
+                return;
+            }
+
+            list.innerHTML = vocabulary.map((word, index) => `
+                <div class="vocab-item">
+                    <div class="vocab-words">
+                        <strong>${word.french}</strong>
+                        <span style="color: #cbd5e0;">→</span>
+                        <span style="color: #667eea; font-weight: 600;">${word.english}</span>
+                    </div>
+                    <button class="btn btn-danger" onclick="removeWord(${index})" style="padding: 8px 16px;">🗑️ Supprimer</button>
+                </div>
+            `).join('');
+        }
+
+        function saveAllData() {
+            const vocabData = JSON.stringify(vocabulary, null, 2);
+            const historyData = JSON.stringify(trainingHistory, null, 2);
+            
+            downloadFile('vocabulary.json', vocabData);
+            downloadFile('training_history.json', historyData);
+            
+            alert('Données sauvegardées ! Vos fichiers vocabulary.json et training_history.json ont été téléchargés.');
+        }
+
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importVocabulary() {
+            const file = document.getElementById('vocabFileInput').files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                
+                if (file.name.endsWith('.json')) {
+                    try {
+                        const data = JSON.parse(content);
+                        vocabulary = data;
+                        displayVocabulary();
+                        alert('Vocabulaire importé avec succès !');
+                    } catch (error) {
+                        alert('Erreur lors de l\'import du fichier JSON.');
+                    }
+                } else {
+                    const lines = content.split('\n').filter(line => line.trim());
+                    lines.forEach(line => {
+                        const parts = line.split(';');
+                        if (parts.length === 2) {
+                            const french = parts[0].trim();
+                            const english = parts[1].trim();
+                            if (french && english) {
+                                vocabulary.push({ french, english });
+                            }
+                        }
+                    });
+                    displayVocabulary();
+                    alert(`${lines.length} mots importés avec succès !`);
+                }
+            };
+            reader.readAsText(file);
+            document.getElementById('vocabFileInput').value = '';
+        }
+
+        function exportVocabulary() {
+            if (vocabulary.length === 0) {
+                alert('Aucun vocabulaire à exporter !');
+                return;
+            }
+
+            const text = vocabulary.map(word => `${word.french};${word.english}`).join('\n');
+            const date = new Date().toISOString().split('T')[0];
+            downloadFile(`vocabulaire_${date}.txt`, text);
+        }
+
+        function importHistory() {
+            const file = document.getElementById('historyFileInput').files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    trainingHistory = data;
+                    displayHistory();
+                    alert('Historique importé avec succès !');
+                } catch (error) {
+                    alert('Erreur lors de l\'import de l\'historique.');
+                }
+            };
+            reader.readAsText(file);
+            document.getElementById('historyFileInput').value = '';
+        }
+
+        function exportHistory() {
+            if (trainingHistory.length === 0) {
+                alert('Aucun historique à exporter !');
+                return;
+            }
+
+            const data = JSON.stringify(trainingHistory, null, 2);
+            const date = new Date().toISOString().split('T')[0];
+            downloadFile(`historique_${date}.json`, data);
+        }
+
+        function startTraining() {
+            if (vocabulary.length === 0) {
+                alert('Ajoutez du vocabulaire avant de commencer l\'entraînement !');
+                return;
+            }
+
+            sessionStats = { total: 0, correct: 0, wrong: 0 };
+            sessionStartTime = new Date();
+            document.getElementById('trainStart').style.display = 'none';
+            document.getElementById('trainActive').style.display = 'block';
+            nextQuestion();
+        }
+
+        function nextQuestion() {
+            document.getElementById('resultPhase').style.display = 'none';
+            document.getElementById('questionPhase').style.display = 'block';
+
+            const randomWord = vocabulary[Math.floor(Math.random() * vocabulary.length)];
+            const askInFrench = Math.random() > 0.5;
+
+            currentWord = {
+                french: randomWord.french,
+                english: randomWord.english,
+                askInFrench: askInFrench,
+                question: askInFrench ? randomWord.french : randomWord.english,
+                correctAnswer: askInFrench ? randomWord.english : randomWord.french
+            };
+
+            document.getElementById('questionLabel').textContent = `Traduisez en ${askInFrench ? 'anglais' : 'français'}`;
+            document.getElementById('questionText').textContent = currentWord.question;
+            document.getElementById('answerInput').value = '';
+            document.getElementById('answerInput').focus();
+        }
+
+        function handleEnterCheck(event) {
+            if (event.key === 'Enter' && document.getElementById('answerInput').value.trim()) {
+                checkAnswer();
+            }
+        }
+
+        function checkAnswer() {
+            const userAnswer = document.getElementById('answerInput').value.trim();
+            if (!userAnswer) return;
+
+            const isCorrect = userAnswer.toLowerCase() === currentWord.correctAnswer.toLowerCase();
+            
+            sessionStats.total++;
+            if (isCorrect) {
+                sessionStats.correct++;
+            } else {
+                sessionStats.wrong++;
+            }
+
+            updateStats();
+            showResult(isCorrect);
+        }
+
+        function skipWord() {
+            nextQuestion();
+        }
+
+        function showResult(isCorrect) {
+            document.getElementById('questionPhase').style.display = 'none';
+            document.getElementById('resultPhase').style.display = 'block';
+
+            const resultBox = document.getElementById('resultBox');
+            const resultIcon = document.getElementById('resultIcon');
+            const resultMessage = document.getElementById('resultMessage');
+            const correctAnswerText = document.getElementById('correctAnswerText');
+
+            if (isCorrect) {
+                resultBox.className = 'result-box correct';
+                resultIcon.textContent = '✓';
+                resultMessage.textContent = 'Correct !';
+                correctAnswerText.textContent = '';
+            } else {
+                resultBox.className = 'result-box incorrect';
+                resultIcon.textContent = '✗';
+                resultMessage.textContent = 'Incorrect';
+                correctAnswerText.textContent = `La bonne réponse était : ${currentWord.correctAnswer}`;
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('totalQuestions').textContent = sessionStats.total;
+            document.getElementById('correctAnswers').textContent = sessionStats.correct;
+            document.getElementById('wrongAnswers').textContent = sessionStats.wrong;
+        }
+
+        function stopTraining() {
+            if (sessionStats.total === 0) {
+                document.getElementById('trainActive').style.display = 'none';
+                document.getElementById('trainStart').style.display = 'block';
+                return;
+            }
+
+            const duration = Math.round((new Date() - sessionStartTime) / 1000);
+            const successRate = Math.round((sessionStats.correct / sessionStats.total) * 100);
+
+            const session = {
+                date: new Date().toISOString(),
+                duration: duration,
+                total: sessionStats.total,
+                correct: sessionStats.correct,
+                wrong: sessionStats.wrong,
+                successRate: successRate
+            };
+
+            trainingHistory.unshift(session);
+            if (trainingHistory.length > 50) {
+                trainingHistory = trainingHistory.slice(0, 50);
+            }
+
+            alert(`Session terminée !\n\nQuestions : ${sessionStats.total}\nCorrect : ${sessionStats.correct}\nIncorrect : ${sessionStats.wrong}\nTaux de réussite : ${successRate}%\n\nPensez à sauvegarder vos données !`);
+
+            document.getElementById('trainActive').style.display = 'none';
+            document.getElementById('trainStart').style.display = 'block';
+        }
+
+        function displayHistory() {
+            const historyList = document.getElementById('historyList');
+
+            if (trainingHistory.length === 0) {
+                historyList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p>Aucun entraînement effectué pour le moment</p></div>';
+                return;
+            }
+
+            historyList.innerHTML = trainingHistory.map(function(session) {
+                const date = new Date(session.date);
+                const dateStr = date.toLocaleDateString('fr-FR', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const minutes = Math.floor(session.duration / 60);
+                const seconds = session.duration % 60;
+
+                return `
+                    <div class="history-item">
+                        <div class="history-header">
+                            <span>📅 ${dateStr}</span>
+                            <span>⏱️ ${minutes}m ${seconds}s</span>
+                        </div>
+                        <div class="history-stats">
+                            <span><strong>Questions:</strong> ${session.total}</span>
+                            <span style="color: #48bb78;"><strong>Correct:</strong> ${session.correct}</span>
+                            <span style="color: #f56565;"><strong>Incorrect:</strong> ${session.wrong}</span>
+                            <span style="color: #667eea;"><strong>Taux:</strong> ${session.successRate}%</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
